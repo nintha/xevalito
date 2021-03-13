@@ -6,6 +6,10 @@ use std::ops::Deref;
 use once_cell::sync::OnceCell;
 use std::sync::Mutex;
 use chrono::Local;
+use std::fmt::{Debug, Formatter};
+use anyhow::Error;
+use std::future::Future;
+use std::pin::Pin;
 
 fn component_mutex() -> &'static Mutex<i64> {
     static INSTANCE: OnceCell<Mutex<i64>> = OnceCell::new();
@@ -24,14 +28,14 @@ fn get_component<T: Component>() -> Option<Arc<T>> {
         .flatten()
 }
 
-fn exist_component<T: Component>() -> bool {
+/// return true if component exists
+pub fn exist_component<T: Component>() -> bool {
     component_dashmap().contains_key(type_name::<T>())
 }
 
-pub trait Component: Any + 'static + Send + Sync + Default {
-    fn instance() -> Result<Arc<Self>, anyhow::Error> {
-        Ok(Default::default())
-    }
+pub trait Component: Any + 'static + Send + Sync {
+    /// create a new component instance
+    fn new_instance() -> Pin<Box<dyn Future<Output=Result<Arc<Self>, anyhow::Error>>>>;
 
     fn register() where Self: std::marker::Sized {
         let name = type_name::<Self>();
@@ -41,11 +45,21 @@ pub trait Component: Any + 'static + Send + Sync + Default {
                 return;
             }
 
-            let component: Arc<dyn Any + 'static + Send + Sync> = Arc::new(Self::default());
+            let component: Arc<dyn Any + 'static + Send + Sync> = match async_std::task::block_on(Self::new_instance()) {
+                Ok(v) => v,
+                Err(e) => {
+                    log::warn!("[Component] register failure, {}", e);
+                    return;
+                }
+            };
             component_dashmap().insert(name.to_string(), component);
-            log::info!("[Component] register, name={}",name);
+            log::info!("[Component] register, name={}", name);
             *timestamp = Local::now().timestamp_millis();
         }
+    }
+
+    fn check_health(&self) -> bool {
+        false
     }
 }
 

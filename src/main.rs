@@ -1,4 +1,6 @@
 use actix_web::*;
+use crate::autowired::{Autowired, Component};
+use crate::common::db::RbaitsService;
 
 mod autowired;
 mod common;
@@ -6,8 +8,9 @@ mod common;
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     common::init_logger();
-    let binding_address = "0.0.0.0:17000";
+    dbg!(Autowired::<RbaitsService>::new().check_health());
 
+    let binding_address = "0.0.0.0:17000";
     HttpServer::new(|| {
         App::new()
     }).bind(binding_address)
