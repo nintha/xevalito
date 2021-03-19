@@ -1,14 +1,13 @@
 use actix_web::*;
-use crate::autowired::{Autowired, Component};
 use crate::common::db::RbaitsService;
+use autowired::Component;
 
-mod autowired;
 mod common;
 
 #[actix_web::main]
-async fn main() -> std::io::Result<()> {
+async fn main() -> anyhow::Result<()> {
     common::init_logger();
-    dbg!(Autowired::<RbaitsService>::new().check_health());
+    autowired::register(RbaitsService::new_instance()?);
 
     let binding_address = "0.0.0.0:17000";
     HttpServer::new(|| {
@@ -16,5 +15,6 @@ async fn main() -> std::io::Result<()> {
     }).bind(binding_address)
         .expect(&format!("Can not bind to {}", binding_address))
         .run()
-        .await
+        .await?;
+    Ok(())
 }
